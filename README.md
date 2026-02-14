@@ -4,6 +4,9 @@ A macOS menu bar plugin for xbar that switches `/etc/hosts`
 between multiple host profile files, with a built in SAFE profile that
 syncs from StevenBlack’s hosts list. Uses `sudo` so Touch ID can be used.
 
+<img width="371" height="356" alt="Screenshot_2026-02-14_at_2 40 05_PM-removebg-preview" src="https://github.com/user-attachments/assets/bba1dd64-8673-4784-93b7-0a69b09d7e5b" />
+
+
 ## Features
 
 • Switch `/etc/hosts` between any profile files in a folder  
