@@ -196,6 +196,30 @@ title_for_active() {
   fi
 }
 
+count_blocked_domains() {
+  local src="$1"
+  [[ -f "$src" ]] || { echo 0; return; }
+
+  awk '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*$/ { next }
+    {
+      ip=$1
+      if (ip != "0.0.0.0" && ip != "127.0.0.1") next
+
+      for (i=2; i<=NF; i++) {
+        host=$i
+        sub(/#.*/, "", host)
+        gsub(/[[:space:]]+/, "", host)
+        if (host == "") continue
+        if (host == "localhost") continue
+        if (host == "broadcasthost") continue
+        print host
+      }
+    }
+  ' "$src" | sort -u | wc -l | tr -d ' '
+}
+
 apply_profile_file() {
   local src="$1"
   [[ -f "$src" ]] || exit 0
@@ -219,19 +243,6 @@ apply_profile_file() {
   rm -f "$LAST_ERROR_FILE" 2>/dev/null || true
 }
 
-refresh_safe_and_apply_if_active() {
-  local active_file
-  active_file="$(detect_active_profile_file)"
-
-  force_refresh_safe
-
-  if (( SAFE_CHANGED == 1 )); then
-    if [[ "$active_file" == "$SAFE_FILE" ]] || hosts_has_stevenblack_signature; then
-      apply_profile_file "$SAFE_FILE"
-    fi
-  fi
-}
-
 open_profiles_folder() {
   /usr/bin/open "$PROFILES_DIR" >/dev/null 2>&1 || true
 }
@@ -251,15 +262,16 @@ handle_actions() {
   local action="${1:-}"
   case "$action" in
     applyfile)
-      fetch_safe_if_needed
       local b64="${2:-}"
       local src
       src="$(decode_b64 "$b64")"
-      apply_profile_file "$src"
-      exit 0
-      ;;
-    refreshsafe)
-      refresh_safe_and_apply_if_active
+
+      if [[ "$src" == "$SAFE_FILE" ]]; then
+        force_refresh_safe
+        apply_profile_file "$SAFE_FILE"
+      else
+        apply_profile_file "$src"
+      fi
       exit 0
       ;;
     openactive)
@@ -284,12 +296,23 @@ main_menu() {
   local title
   title="$(title_for_active "$active_file")"
 
+  local count_source blocked_count
+  if [[ -n "$active_file" ]]; then
+    count_source="$active_file"
+  else
+    count_source="$ETC_HOSTS"
+  fi
+  blocked_count="$(count_blocked_domains "$count_source")"
+
   local safe_synced upstream_lastmod hosts_mtime
   safe_synced="$(file_mtime_human "$SAFE_FILE")"
   upstream_lastmod="$(read_file_or_unknown "$UPSTREAM_LASTMOD_FILE")"
   hosts_mtime="$(file_mtime_human "$ETC_HOSTS")"
 
   echo "$title"
+  echo "---"
+
+  echo "Blocked domains: ${blocked_count}"
   echo "---"
 
   if [[ -f "$LAST_ERROR_FILE" ]]; then
@@ -326,7 +349,6 @@ main_menu() {
   echo "---"
   echo "Open active hosts file | bash=/bin/bash param1='$SELF' param2=openactive terminal=false refresh=false"
   echo "Open profiles folder | bash=/bin/bash param1='$SELF' param2=openprofiles terminal=false refresh=false"
-  echo "Refresh SAFE now | bash=/bin/bash param1='$SELF' param2=refreshsafe terminal=false refresh=true"
 }
 
 handle_actions "${1:-}" "${2:-}"
